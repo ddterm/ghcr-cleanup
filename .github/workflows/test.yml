@@ -1,0 +1,27 @@
+concurrency: ${{ github.workflow }}
+
+on:
+  workflow_dispatch:
+
+jobs:
+  gnome-shell-pod:
+    uses: ./.github/workflows/cleanup.yml
+
+    with:
+      dry-run: true
+      repository: ddterm/gnome-shell-pod
+      owner: ddterm
+
+    secrets:
+      packages-api-token: ${{ secrets.DELETE_PACKAGES_TOKEN_RO }}
+
+  ci-docker-image:
+    uses: ./.github/workflows/cleanup.yml
+
+    with:
+      dry-run: true
+      repository: ddterm/ci-docker-image
+      owner: ddterm
+
+    secrets:
+      packages-api-token: ${{ secrets.DELETE_PACKAGES_TOKEN_RO }}

@@ -1,0 +1,47 @@
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        description: "Don't delete images, only print names and URLs"
+        required: true
+        type: boolean
+
+      repository:
+        description: "GitHub repository name"
+        required: false
+        default: ${{ github.repository }}
+        type: string
+
+      owner:
+        description: "Package owner"
+        required: false
+        default: ${{ github.repository_owner }}
+        type: string
+
+    secrets:
+      packages-api-token:
+        description: "A personal access token with packages:delete permission"
+        required: true
+
+concurrency: ${{ github.workflow }}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.action_repository }}
+
+      - uses: actions/setup-node@v3
+
+      - run: npm ci
+
+      - run: >-
+          ./cleanup.js
+          ${{ inputs.dry-run && '-n' || '' }}
+          -t "${{ secrets.packages-api-token }}"
+          -r "${{ inputs.repository }}"
+          -o "${{ inputs.owner }}"
+          -j4
