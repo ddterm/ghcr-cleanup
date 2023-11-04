@@ -23,8 +23,6 @@ on:
         description: "A personal access token with packages:delete permission"
         required: true
 
-concurrency: ghcr-cleanup
-
 jobs:
   cleanup:
     runs-on: ubuntu-latest
