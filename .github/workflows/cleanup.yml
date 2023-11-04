@@ -23,7 +23,7 @@ on:
         description: "A personal access token with packages:delete permission"
         required: true
 
-concurrency: ${{ github.workflow }}
+concurrency: ghcr-cleanup
 
 jobs:
   cleanup:
