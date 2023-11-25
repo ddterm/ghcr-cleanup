@@ -215,12 +215,12 @@ async function main() {
     };
 
     const getRefName = async version => {
-        octokit.log.debug(`Getting revision for image ${version.image}`);
+        octokit.log.debug(`Getting revision for ${version.image}`, version.manifestUrl);
 
         const manifest = await (await fetch(version.manifestUrl, dockerRegistryOptions)).json();
         const digest = manifest?.config?.digest;
         if (!digest) {
-            octokit.log.warn(`Can't get digest for ${version.image}`);
+            octokit.log.warn(`Can't get digest for ${version.image} from manifest`, manifest);
             return null;
         }
 
