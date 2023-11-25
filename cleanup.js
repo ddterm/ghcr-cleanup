@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
-const http = require('http');
-const https = require('https');
-const stream = require('node:stream');
-const url = require('node:url');
+import stream from 'node:stream';
+import url from 'node:url';
 
-const yargs = require('yargs/yargs');
-const merge_stream = require('merge-stream');
+import yargs from 'yargs/yargs';
+import { hideBin } from 'yargs/helpers';
 
-const Octokit = require('@octokit/core').Octokit.plugin(
-    require('@octokit/plugin-paginate-rest').paginateRest,
-    require('@octokit/plugin-throttling').throttling,
-    require('@octokit/plugin-retry').retry,
-    require('@octokit/plugin-request-log').requestLog,
+import merge_stream from 'merge-stream';
+
+const Octokit = (await import('@octokit/core')).Octokit.plugin(
+    (await import('@octokit/plugin-paginate-rest')).paginateRest,
+    (await import('@octokit/plugin-throttling')).throttling,
+    (await import('@octokit/plugin-retry')).retry,
+    (await import('@octokit/plugin-request-log')).requestLog
 )
 
 // from docker/metadata-action
@@ -21,7 +21,9 @@ function sanitizeTag(tag) {
 }
 
 async function main() {
-    const args = yargs(require('yargs/helpers').hideBin(process.argv))
+    const logLevels = ['debug', 'info', 'warn', 'error'];
+
+    const args = yargs(hideBin(process.argv))
         .option('token', {
             alias: 't',
             demandOption: true,
@@ -70,7 +72,7 @@ async function main() {
             alias: 'v',
             demandOption: true,
             describe: 'Console log level',
-            choices: ['trace', 'debug', 'info', 'warn', 'error', 'fatal'],
+            choices: logLevels,
             requiresArg: true,
             default: 'info',
         })
@@ -90,12 +92,17 @@ async function main() {
         .strict()
         .argv;
 
+    const logLevel = logLevels.indexOf(args.logLevel)
+    const log = Object.fromEntries(
+        logLevels.map(
+            (name, index) => [name, index >= logLevel ? console[name].bind(console) : new Function()]
+        )
+    );
+
     const octokit = new Octokit({
         auth: args.token,
         baseUrl: args.apiUrl,
-        log: require('console-log-level')({
-            level: args.logLevel,
-        }),
+        log,
         throttle: {
             onRateLimit: (retryAfter, options, octokit) => {
                 octokit.log.warn(
@@ -158,21 +165,21 @@ async function main() {
     ).flatMap(response => response.data);
 
     const repoPackages = packages.filter(
-        package => (
-            package.repository && package.repository.node_id === repo.node_id
+        pkg => (
+            pkg.repository && pkg.repository.node_id === repo.node_id
         )
     );
 
     const repoPackagesWithVersions = repoPackages.map(
-        async package => {
-            package.versions = await stream.Readable.from(
+        async pkg => {
+            pkg.versions = await stream.Readable.from(
                 octokit.paginate.iterator(
                     'GET {+package_url}/versions',
-                    { package_url: package.url }
+                    { package_url: pkg.url }
                 )
             ).flatMap(response => response.data).toArray();
 
-            return package;
+            return pkg;
         },
         concurrencyOptions,
     );
@@ -180,11 +187,11 @@ async function main() {
     const registryUrl = new url.URL(args.registryUrl);
 
     const versions = repoPackagesWithVersions.flatMap(
-        package => {
-            const image = `${registryUrl.host}/${package.owner.login}/${package.name}`;
-            const registryBaseUrl = new url.URL(`/v2/${package.owner.login}/${package.name}/`, registryUrl).toString();
+        pkg => {
+            const image = `${registryUrl.host}/${pkg.owner.login}/${pkg.name}`;
+            const registryBaseUrl = new url.URL(`/v2/${pkg.owner.login}/${pkg.name}/`, registryUrl).toString();
 
-            return package.versions.map(version => {
+            return pkg.versions.map(version => {
                 version.image = `${image}@${version.name}`;
                 version.manifestUrl = new url.URL(`./manifests/${version.name}`, registryBaseUrl).toString();
                 version.blobBaseUrl = new url.URL('./blobs/', registryBaseUrl).toString();
