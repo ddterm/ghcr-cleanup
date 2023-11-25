@@ -2,8 +2,6 @@ name: schedule
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: 34 12 * * *
 
 concurrency: ${{ github.workflow }}/${{ github.ref }}
 
