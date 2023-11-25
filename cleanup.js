@@ -5,7 +5,6 @@ const https = require('https');
 const stream = require('node:stream');
 const url = require('node:url');
 
-const fetch = require('node-fetch');
 const yargs = require('yargs/yargs');
 const merge_stream = require('merge-stream');
 
@@ -206,7 +205,7 @@ async function main() {
     );
 
     const dockerRegistryOptions = {
-        headers: new fetch.Headers({
+        headers: new Headers({
             'Authorization': `bearer ${Buffer.from(args.token).toString('base64')}`,
             'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
         }),
