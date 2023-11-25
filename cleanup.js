@@ -204,18 +204,28 @@ async function main() {
         }
     );
 
-    const dockerRegistryOptions = {
-        headers: new Headers({
-            'Authorization': `bearer ${Buffer.from(args.token).toString('base64')}`,
-            'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
-        }),
-        agent
+    const dockerRegistryAuth = {
+        'Authorization': `bearer ${Buffer.from(args.token).toString('base64')}`
     };
+
+    const dockerRegistryFetch = async (url, contentTypes) => {
+        const headers = new Headers(dockerRegistryAuth);
+
+        for (const contentType of contentTypes) {
+            headers.append('Accept', contentType);
+        }
+
+        const response = await fetch(url, { headers, agent });
+        return await response.json();
+    };
+
+    const dockerManifestTypes = ['application/vnd.docker.distribution.manifest.v2+json'];
+    const dockerConfigTypes = ['application/vnd.docker.container.image.v1+json'];
 
     const getRefName = async version => {
         octokit.log.debug(`Getting revision for ${version.image}`, version.manifestUrl);
 
-        const manifest = await (await fetch(version.manifestUrl, dockerRegistryOptions)).json();
+        const manifest = await dockerRegistryFetch(version.manifestUrl, dockerManifestTypes);
         const digest = manifest?.config?.digest;
         if (!digest) {
             octokit.log.warn(`Can't get digest for ${version.image} from manifest`, manifest);
@@ -223,7 +233,7 @@ async function main() {
         }
 
         version.configUrl = new url.URL(`./${digest}`, version.blobBaseUrl).toString();
-        const config = await (await fetch(version.configUrl, dockerRegistryOptions)).json();
+        const config = await dockerRegistryFetch(version.configUrl, dockerConfigTypes);
         const labels = config?.config?.Labels;
         const refName = labels ? labels['org.opencontainers.image.version'] : null;
         octokit.log.debug(`Version of ${version.image}: ${refName}`);
