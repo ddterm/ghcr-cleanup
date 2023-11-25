@@ -7,7 +7,6 @@ const url = require('node:url');
 
 const fetch = require('node-fetch');
 const yargs = require('yargs/yargs');
-const template = require('url-template');
 const merge_stream = require('merge-stream');
 
 const httpAgent = new http.Agent({ keepAlive: true });
@@ -145,7 +144,7 @@ async function main() {
     )).data;
 
     const branches = stream.Readable.from(
-        octokit.paginate.iterator(template.parse(repo.branches_url).expand({}))
+        octokit.paginate.iterator(repo.branches_url, {})
     ).flatMap(response => response.data).map(branch => branch.name);
 
     const tags = stream.Readable.from(
