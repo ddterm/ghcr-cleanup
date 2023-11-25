@@ -219,8 +219,15 @@ async function main() {
         return await response.json();
     };
 
-    const dockerManifestTypes = ['application/vnd.docker.distribution.manifest.v2+json'];
-    const dockerConfigTypes = ['application/vnd.docker.container.image.v1+json'];
+    const dockerManifestTypes = [
+        'application/vnd.docker.distribution.manifest.v2+json',
+        'application/vnd.oci.image.manifest.v1+json'
+    ];
+
+    const dockerConfigTypes = [
+        'application/vnd.docker.container.image.v1+json',
+        'application/vnd.oci.image.config.v1+json'
+    ];
 
     const getRefName = async version => {
         octokit.log.debug(`Getting revision for ${version.image}`, version.manifestUrl);
