@@ -216,10 +216,17 @@ async function main() {
 
     const getRefName = async version => {
         octokit.log.debug(`Getting revision for image ${version.image}`);
+
         const manifest = await (await fetch(version.manifestUrl, dockerRegistryOptions)).json();
-        version.configUrl = new url.URL(`./${manifest.config.digest}`, version.blobBaseUrl).toString();
+        const digest = manifest?.config?.digest;
+        if (!digest) {
+            octokit.log.warn(`Can't get digest for ${version.image}`);
+            return null;
+        }
+
+        version.configUrl = new url.URL(`./${digest}`, version.blobBaseUrl).toString();
         const config = await (await fetch(version.configUrl, dockerRegistryOptions)).json();
-        const labels = config.config.Labels;
+        const labels = config?.config?.Labels;
         const refName = labels ? labels['org.opencontainers.image.version'] : null;
         octokit.log.debug(`Version of ${version.image}: ${refName}`);
         return refName;
@@ -228,13 +235,8 @@ async function main() {
     const toDelete = await versions.filter(
         async version => {
             octokit.log.debug(`Processing ${version.displayImage}`);
-
             const ref = await getRefName(version);
-            if (!ref) {
-                return false;
-            }
-
-            return !refs.includes(ref);
+            return ref && refs.includes(ref);
         },
         concurrencyOptions,
     );
