@@ -172,7 +172,7 @@ async function main() {
         )
     );
 
-    const repoPackagesWithVersions = await repoPackages.map(
+    const repoPackagesWithVersions = repoPackages.map(
         async package => {
             package.versions = await stream.Readable.from(
                 octokit.paginate.iterator(
@@ -232,7 +232,7 @@ async function main() {
         return refName;
     };
 
-    const toDelete = await versions.filter(
+    const toDelete = versions.filter(
         async version => {
             octokit.log.debug(`Processing ${version.displayImage}`);
             const ref = await getRefName(version);
