@@ -236,7 +236,7 @@ async function main() {
         async version => {
             octokit.log.debug(`Processing ${version.displayImage}`);
             const ref = await getRefName(version);
-            return ref && refs.includes(ref);
+            return ref && !refs.includes(ref);
         },
         concurrencyOptions,
     );
