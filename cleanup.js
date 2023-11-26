@@ -229,29 +229,45 @@ async function main() {
         'application/vnd.oci.image.config.v1+json'
     ];
 
-    const getRefName = async version => {
-        octokit.log.debug(`Getting revision for ${version.image}`, version.manifestUrl);
+    const fetchDockerImageConfig = async version => {
+        octokit.log.debug(`Getting image config for ${version.image}`, version.manifestUrl);
 
         const manifest = await dockerRegistryFetch(version.manifestUrl, dockerManifestTypes);
         const digest = manifest?.config?.digest;
         if (!digest) {
-            octokit.log.warn(`Can't get digest for ${version.image} from manifest`, manifest);
+            octokit.log.warn(`Can't get digest for ${version.image} config from manifest`, manifest);
             return null;
         }
 
         version.configUrl = new url.URL(`./${digest}`, version.blobBaseUrl).toString();
-        const config = await dockerRegistryFetch(version.configUrl, dockerConfigTypes);
-        const labels = config?.config?.Labels;
-        const refName = labels ? labels['org.opencontainers.image.version'] : null;
-        octokit.log.debug(`Version of ${version.image}: ${refName}`);
-        return refName;
-    };
+        return await dockerRegistryFetch(version.configUrl, dockerConfigTypes);
+    }
+
+    const minAge = new Date();
+    minAge.setDate(minAge.getDate() - 1);
 
     const toDelete = versions.filter(
         async version => {
             octokit.log.debug(`Processing ${version.displayImage}`);
-            const ref = await getRefName(version);
-            return ref && !refs.includes(ref);
+
+            const config = await fetchDockerImageConfig(version);
+
+            const created = Date.parse(config?.created);
+            if (isNaN(created)) {
+                octokit.log.warn(`No created date in ${version.image} config`, config);
+                return false;
+            }
+
+            if (created > minAge) {
+                octokit.log.info(`Image ${version.image} is too new`, created);
+                return false;
+            }
+
+            const labels = config?.config?.Labels;
+            const refName = labels ? labels['org.opencontainers.image.version'] : null;
+            octokit.log.debug(`Version of ${version.image}: ${refName}`);
+
+            return refName && !refs.includes(refName);
         },
         concurrencyOptions,
     );
