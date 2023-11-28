@@ -5,6 +5,8 @@ on:
 
 jobs:
   test:
-    if: ${{ github.event.pull_request.base.repo.node_id != github.event.pull_request.head.repo.node_id }}
     uses: ./.github/workflows/test.yml
     secrets: inherit
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'renovate/')
+      || github.event.pull_request.base.repo.node_id != github.event.pull_request.head.repo.node_id
