@@ -8,13 +8,6 @@ const url = require('node:url');
 const yargs = require('yargs/yargs');
 const merge_stream = require('merge-stream');
 
-const httpAgent = new http.Agent({ keepAlive: true });
-const httpsAgent = new https.Agent({ keepAlive: true });
-
-function agent(url) {
-    return url.protocol == 'http:' ? httpAgent : httpsAgent;
-}
-
 const Octokit = require('@octokit/core').Octokit.plugin(
     require('@octokit/plugin-paginate-rest').paginateRest,
     require('@octokit/plugin-throttling').throttling,
@@ -215,7 +208,7 @@ async function main() {
             headers.append('Accept', contentType);
         }
 
-        const response = await fetch(url, { headers, agent });
+        const response = await fetch(url, { headers });
         return await response.json();
     };
 
