@@ -33,4 +33,5 @@ jobs:
           -t "${{ secrets.packages-api-token }}"
           -r "${{ matrix.repository }}"
           -o "${{ github.repository_owner }}"
+          --log-level ${{ env.ACTIONS_STEP_DEBUG && 'debug' || 'info' }}
           -j4

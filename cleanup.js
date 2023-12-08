@@ -20,6 +20,106 @@ function sanitizeTag(tag) {
     return tag.replace(/[^a-zA-Z0-9._-]+/g, '-');
 }
 
+class DockerRepository {
+    constructor(registry, repository, namespace) {
+        this.registry = registry;
+        this.baseUrl = registry.resolveUrl(`/v2/${namespace}/${repository}/`);
+    }
+
+    resolveUrl(relative) {
+        return new url.URL(relative, this.baseUrl).toString();
+    }
+
+    async fetchJson(url, contentTypes) {
+        return await this.registry.fetchJson(this.resolveUrl(url), contentTypes);
+    }
+
+    async fetchManifests(reference) {
+        const manifestTypes = [
+            'application/vnd.docker.distribution.manifest.v2+json',
+            'application/vnd.oci.image.manifest.v1+json',
+        ];
+
+        const indexTypes = [
+            'application/vnd.docker.distribution.manifest.list.v2+json',
+            'application/vnd.oci.image.index.v1+json',
+        ];
+
+        const response = await this.fetchJson(`./manifests/${reference}`, [
+            ...manifestTypes,
+            ...indexTypes,
+        ]);
+
+        response.reference = reference;
+
+        if (manifestTypes.includes(response.mediaType)) {
+            return stream.Readable.from([response]);
+        }
+
+        if (indexTypes.includes(response.mediaType)) {
+            return stream.Readable.from(response.manifests).flatMap(
+                manifest => this.fetchManifests(manifest.digest)
+            ).map(manifest => {
+                return { ...manifest, parent: response };
+            });
+        }
+
+        throw new Error(`Unknown mediaType: ${response.mediaType}`);
+    }
+
+    async fetchConfig(manifest) {
+        const data = await this.fetchJson(`./blobs/${manifest.config.digest}`, [
+            'application/vnd.docker.distribution.manifest.v2+json',
+            'application/vnd.oci.image.manifest.v1+json',
+        ]);
+
+        data.manifest = manifest;
+        return data;
+    }
+
+    async fetchConfigs(reference) {
+        const manifests = await this.fetchManifests(reference);
+
+        return manifests.map(manifest => this.fetchConfig(manifest));
+    }
+}
+
+class DockerRegistry {
+    constructor(baseUrl, token) {
+        this.baseUrl = baseUrl;
+
+        this.auth = {
+            'Authorization': `bearer ${Buffer.from(token).toString('base64')}`
+        };
+    }
+
+    resolveUrl(relative) {
+        return new url.URL(relative, this.baseUrl).toString();
+    }
+
+    async fetch(url, contentTypes) {
+        const headers = new Headers(this.auth);
+
+        for (const contentType of contentTypes) {
+            headers.append('Accept', contentType);
+        }
+
+        const response = await globalThis.fetch(this.resolveUrl(url), { headers });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error ${response.url}: ${response.status} ${response.statusText}`);
+        }
+
+        return response;
+    }
+
+    async fetchJson(url, contentTypes) {
+        const response = await this.fetch(url, contentTypes);
+
+        return await response.json();
+    }
+}
+
 async function main() {
     const logLevels = ['debug', 'info', 'warn', 'error'];
 
@@ -184,17 +284,16 @@ async function main() {
         concurrencyOptions,
     );
 
-    const registryUrl = new url.URL(args.registryUrl);
+    const registry = new DockerRegistry(args.registryUrl, args.token, log);
 
     const versions = repoPackagesWithVersions.flatMap(
         pkg => {
-            const image = `${registryUrl.host}/${pkg.owner.login}/${pkg.name}`;
-            const registryBaseUrl = new url.URL(`/v2/${pkg.owner.login}/${pkg.name}/`, registryUrl).toString();
+            const repository = new DockerRepository(registry, pkg.name, pkg.owner.login);
+            const image = `${pkg.owner.login}/${pkg.name}`;
 
             return pkg.versions.map(version => {
+                version.repository = repository;
                 version.image = `${image}@${version.name}`;
-                version.manifestUrl = new url.URL(`./manifests/${version.name}`, registryBaseUrl).toString();
-                version.blobBaseUrl = new url.URL('./blobs/', registryBaseUrl).toString();
 
                 const tags = version.metadata.container.tags;
                 version.displayImage = tags.length > 0 ? `${image}:${tags[0]}` : version.image;
@@ -204,70 +303,39 @@ async function main() {
         }
     );
 
-    const dockerRegistryAuth = {
-        'Authorization': `bearer ${Buffer.from(args.token).toString('base64')}`
-    };
-
-    const dockerRegistryFetch = async (url, contentTypes) => {
-        const headers = new Headers(dockerRegistryAuth);
-
-        for (const contentType of contentTypes) {
-            headers.append('Accept', contentType);
-        }
-
-        const response = await fetch(url, { headers });
-        return await response.json();
-    };
-
-    const dockerManifestTypes = [
-        'application/vnd.docker.distribution.manifest.v2+json',
-        'application/vnd.oci.image.manifest.v1+json'
-    ];
-
-    const dockerConfigTypes = [
-        'application/vnd.docker.container.image.v1+json',
-        'application/vnd.oci.image.config.v1+json'
-    ];
-
-    const fetchDockerImageConfig = async version => {
-        octokit.log.debug(`Getting image config for ${version.image}`, version.manifestUrl);
-
-        const manifest = await dockerRegistryFetch(version.manifestUrl, dockerManifestTypes);
-        const digest = manifest?.config?.digest;
-        if (!digest) {
-            octokit.log.warn(`Can't get digest for ${version.image} config from manifest`, manifest);
-            return null;
-        }
-
-        version.configUrl = new url.URL(`./${digest}`, version.blobBaseUrl).toString();
-        return await dockerRegistryFetch(version.configUrl, dockerConfigTypes);
-    }
-
     const minAge = new Date();
     minAge.setDate(minAge.getDate() - 1);
+
+    const shouldDelete = async (version, config) => {
+        const created = Date.parse(config?.created);
+        if (isNaN(created)) {
+            octokit.log.warn(`No created date in ${version.displayImage} config`, config);
+            return false;
+        }
+
+        if (created > minAge) {
+            octokit.log.info(`Image ${version.displayImage} is too new`, created);
+            return false;
+        }
+
+        const labels = config?.config?.Labels;
+        const refName = labels ? labels['org.opencontainers.image.version'] : null;
+        octokit.log.debug(`Version of ${version.displayImage}: ${refName}`);
+
+        return refName && !refs.includes(refName);
+    };
 
     const toDelete = versions.filter(
         async version => {
             octokit.log.debug(`Processing ${version.displayImage}`);
 
-            const config = await fetchDockerImageConfig(version);
+            try {
+                const configs = await version.repository.fetchConfigs(version.name);
 
-            const created = Date.parse(config?.created);
-            if (isNaN(created)) {
-                octokit.log.warn(`No created date in ${version.image} config`, config);
-                return false;
+                return await configs.every(config => shouldDelete(version, config));
+            } catch (ex) {
+                octokit.log.error(`Error while processing ${version.displayImage}: ${ex}`);
             }
-
-            if (created > minAge) {
-                octokit.log.info(`Image ${version.image} is too new`, created);
-                return false;
-            }
-
-            const labels = config?.config?.Labels;
-            const refName = labels ? labels['org.opencontainers.image.version'] : null;
-            octokit.log.debug(`Version of ${version.image}: ${refName}`);
-
-            return refName && !refs.includes(refName);
         },
         concurrencyOptions,
     );
