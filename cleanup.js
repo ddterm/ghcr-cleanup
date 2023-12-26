@@ -317,36 +317,38 @@ async function main() {
     const maxAge = new Date();
     maxAge.setFullYear(minAge.getFullYear() - 1);
 
-    const shouldDelete = async (version, config) => {
-        const updated = new Date(version.updated_at);
-
-        if (updated > minAge) {
-            octokit.log.info(`Image ${version.displayImage} is too new`, updated);
-            return false;
-        }
-
-        if (updated < maxAge) {
-            octokit.log.info(`Image ${version.displayImage} is too old`, updated);
-            return true;
-        }
-
-        const labels = config?.config?.Labels;
-        const refName = labels ? labels['org.opencontainers.image.version'] : null;
-        octokit.log.debug(`Version of ${version.displayImage}: ${refName}`);
-
-        return refName && !refs.includes(refName);
-    };
-
     const toDelete = versions.filter(
         async version => {
             octokit.log.debug(`Processing ${version.displayImage}`);
 
             try {
+                const updated = new Date(version.updated_at);
+
+                if (updated > minAge) {
+                    octokit.log.info(`Image ${version.displayImage} is too new`, updated);
+                    return false;
+                }
+
+                if (updated < maxAge) {
+                    octokit.log.info(`Image ${version.displayImage} is too old`, updated);
+                    return true;
+                }
+
                 const configs = await version.repository.fetchConfigs(version.name);
 
-                return await configs.every(config => shouldDelete(version, config));
+                return await configs.every(async config => {
+                    const refName = config.config.Labels['org.opencontainers.image.version'];
+
+                    if (!refName) {
+                        octokit.log.error(`Image ${version.displayImage} has no version label`, version);
+                        return false;
+                    }
+
+                    octokit.log.debug(`Version of ${version.displayImage}: ${refName}`);
+                    return !refs.includes(refName);
+                });
             } catch (ex) {
-                octokit.log.error(`Error while processing ${version.displayImage}: ${ex}`);
+                octokit.log.error(`Error while processing ${version.displayImage}: ${ex}`, version);
             }
         },
         concurrencyOptions,
