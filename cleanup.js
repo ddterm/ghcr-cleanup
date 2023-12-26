@@ -246,11 +246,15 @@ async function main() {
         octokit.paginate.iterator(repo.branches_url, {})
     ).flatMap(response => response.data).map(branch => branch.name);
 
+    const prs = stream.Readable.from(
+        octokit.paginate.iterator(repo.pulls_url, { state: 'open' })
+    ).flatMap(response => response.data).map(pr => `pr-${pr.number}`);
+
     const tags = stream.Readable.from(
         octokit.paginate.iterator(repo.tags_url)
     ).flatMap(response => response.data).map(tag => tag.name);
 
-    const refs = await merge_stream(branches, tags).map(sanitizeTag).toArray();
+    const refs = await merge_stream(branches, tags, prs).map(sanitizeTag).toArray();
 
     octokit.log.info(`Branches and tags found: ${JSON.stringify(refs)}`);
 
