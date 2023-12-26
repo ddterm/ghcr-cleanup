@@ -337,10 +337,10 @@ async function main() {
                 const configs = await version.repository.fetchConfigs(version.name);
 
                 return await configs.every(async config => {
-                    const refName = config.config.Labels['org.opencontainers.image.version'];
+                    const refName = config.config.Labels?.['org.opencontainers.image.version'];
 
                     if (!refName) {
-                        octokit.log.error(`Image ${version.displayImage} has no version label`, version);
+                        octokit.log.error(`Image ${version.displayImage} has no version label`, config);
                         return false;
                     }
 
