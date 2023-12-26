@@ -310,6 +310,9 @@ async function main() {
     const minAge = new Date();
     minAge.setDate(minAge.getDate() - 1);
 
+    const maxAge = new Date();
+    maxAge.setFullYear(minAge.getFullYear() - 1);
+
     const shouldDelete = async (version, config) => {
         const created = Date.parse(config?.created);
         if (isNaN(created)) {
@@ -320,6 +323,11 @@ async function main() {
         if (created > minAge) {
             octokit.log.info(`Image ${version.displayImage} is too new`, created);
             return false;
+        }
+
+        if (created < maxAge) {
+            octokit.log.info(`Image ${version.displayImage} is too old`, created);
+            return true;
         }
 
         const labels = config?.config?.Labels;

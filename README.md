@@ -5,12 +5,14 @@ For every repository:
 
 1. Images created less than 1 day ago are kept
 
-2. Images with no defined build date (cache?) are kept
+2. Images created more than 1 year ago are deleted
 
-3. Images with `org.opencontainers.image.version` label matching existing
+3. Images with no defined build date (cache?) are kept
+
+4. Images with `org.opencontainers.image.version` label matching existing
 tags/branches or open pull requests are kept
 
-4. Everything else is deleted
+5. Everything else is deleted
 
 ## REST API pagination race condition
 
