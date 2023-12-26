@@ -314,19 +314,15 @@ async function main() {
     maxAge.setFullYear(minAge.getFullYear() - 1);
 
     const shouldDelete = async (version, config) => {
-        const created = Date.parse(config?.created);
-        if (isNaN(created)) {
-            octokit.log.warn(`No created date in ${version.displayImage} config`, config);
+        const updated = new Date(version.updated_at);
+
+        if (updated > minAge) {
+            octokit.log.info(`Image ${version.displayImage} is too new`, updated);
             return false;
         }
 
-        if (created > minAge) {
-            octokit.log.info(`Image ${version.displayImage} is too new`, created);
-            return false;
-        }
-
-        if (created < maxAge) {
-            octokit.log.info(`Image ${version.displayImage} is too old`, created);
+        if (updated < maxAge) {
+            octokit.log.info(`Image ${version.displayImage} is too old`, updated);
             return true;
         }
 
