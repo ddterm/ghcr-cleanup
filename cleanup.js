@@ -243,15 +243,15 @@ async function main() {
     )).data;
 
     const branches = stream.Readable.from(
-        octokit.paginate.iterator(repo.branches_url, {})
+        octokit.paginate.iterator(repo.branches_url, { per_page: 100 })
     ).flatMap(response => response.data).map(branch => branch.name);
 
     const prs = stream.Readable.from(
-        octokit.paginate.iterator(repo.pulls_url, { state: 'open' })
+        octokit.paginate.iterator(repo.pulls_url, { state: 'open', per_page: 100 })
     ).flatMap(response => response.data).map(pr => `pr-${pr.number}`);
 
     const tags = stream.Readable.from(
-        octokit.paginate.iterator(repo.tags_url)
+        octokit.paginate.iterator(repo.tags_url, { per_page: 100 } )
     ).flatMap(response => response.data).map(tag => tag.name);
 
     const refs = await merge_stream(branches, tags, prs).map(sanitizeTag).toArray();
@@ -264,6 +264,7 @@ async function main() {
             {
                 user_url: repo.owner.url,
                 package_type: 'container',
+                per_page: 100,
             }
         )
     ).flatMap(response => response.data);
@@ -279,7 +280,10 @@ async function main() {
             pkg.versions = await stream.Readable.from(
                 octokit.paginate.iterator(
                     'GET {+package_url}/versions',
-                    { package_url: pkg.url }
+                    {
+                        package_url: pkg.url,
+                        per_page: 100,
+                    }
                 )
             ).flatMap(response => response.data).toArray();
 
