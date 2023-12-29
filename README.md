@@ -15,7 +15,7 @@ tags/branches or open pull requests are kept
 ## REST API pagination race condition
 
 It seems that GitHub API pagination can "skip" a branch/tag/pull request
-if it's deleted concurrently.
+if another branch/tag/PR is deleted concurrently.
 
 However, we mostly care about tags. Images for branches and pull requests
 are not as precious and can be rebuilt if necessary.
