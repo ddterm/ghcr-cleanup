@@ -5,6 +5,8 @@ on:
     branches-ignore:
       - renovate/**
 
+permissions: read-all
+
 jobs:
   test:
     uses: ./.github/workflows/test.yml

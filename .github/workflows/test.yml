@@ -6,12 +6,11 @@ on:
 
 concurrency: ${{ github.workflow }}/${{ github.ref }}
 
+permissions: read-all
+
 jobs:
   test:
     uses: ./.github/workflows/cleanup.yml
-
+    secrets: inherit
     with:
       dry-run: true
-
-    secrets:
-      packages-api-token: ${{ secrets.DELETE_PACKAGES_TOKEN_RO }}

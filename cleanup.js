@@ -232,6 +232,20 @@ async function main() {
         concurrency: args.jobs,
     }
 
+    const user = (await octokit.request(
+        'GET /users/{owner}',
+        {
+            owner: args.owner,
+        }
+    )).data;
+
+    const org = user.type === 'Organization' ? (await octokit.request(
+        'GET /orgs/{owner}',
+        {
+            owner: args.owner,
+        }
+    )).data : null;
+
     const ownerPrefix = `${args.owner}/`;
 
     const repo = (await octokit.request(
@@ -262,7 +276,7 @@ async function main() {
         octokit.paginate.iterator(
             'GET {+user_url}/packages',
             {
-                user_url: repo.owner.url,
+                user_url: org?.url ?? user.url,
                 package_type: 'container',
                 per_page: 100,
             }

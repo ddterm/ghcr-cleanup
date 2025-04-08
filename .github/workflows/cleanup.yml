@@ -6,10 +6,7 @@ on:
         required: true
         type: boolean
 
-    secrets:
-      packages-api-token:
-        description: "A personal access token with packages:delete permission"
-        required: true
+permissions: read-all
 
 jobs:
   cleanup:
@@ -28,11 +25,20 @@ jobs:
       - uses: actions/setup-node@v4
       - run: npm ci
 
+      - id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_KEY }}
+          owner: ${{ github.repository_owner }}
+        if: ${{ github.secret_source == 'Actions' }}
+
       - run: >-
           ./cleanup.js
           ${{ inputs.dry-run && '-n' || '' }}
-          -t "${{ secrets.packages-api-token }}"
           -r "${{ matrix.repository }}"
           -o "${{ github.repository_owner }}"
-          --log-level ${{ env.ACTIONS_STEP_DEBUG && 'debug' || 'info' }}
+          --log-level ${{ runner.debug && 'debug' || 'info' }}
           -j4
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
