@@ -8,6 +8,6 @@
     "@octokit/plugin-retry": "^8.0.0",
     "@octokit/plugin-throttling": "^11.0.0",
     "merge-stream": "^2.0.0",
-    "yargs": "^17.6.2"
+    "yargs": "^18.0.0"
   }
 }
